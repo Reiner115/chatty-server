@@ -1,61 +1,30 @@
-var express = require("express");
-var app = express();
-const auth = require("../Authentication/auth")
 
-var myLogger = function (err , req, res, next) {
-		
-		console.log(" code : " + err.statusCode);
-		console.log( " msg : " + err.mesg);
-		console.log( "message : " + err.message);
-		res.status( err.statusCode ).send( err );
-		next();
-	
-  } 
+const passport = require("passport");
 
+const router = require("express").Router();
+const checkLogin = require("../routes/checkLogin");
+const getContacsRoute = require("../routes/getContacts");
+const loginRoute = require("../routes/loginRoute");
+const registerRouter = require("../routes/registerRoute");
+const logoutRouter = require("../routes/logoutRoute");
+/*
+router.use("/" , (req , res )=>{
+    const root = __dirname.substring(0,__dirname.lastIndexOf("\\"));
+    console.log(  );
+    res.sendFile(`${root}\\public\\index.html`)})
+    */
+router.use("/checkLogin", checkLogin);
+router.use("/getContacts", getContacsRoute);
+router.use("/login", passport.authenticate("local"), loginRoute);
+router.use("/register", registerRouter);
+router.use("/logout", logoutRouter);
+const path = require("path")
+router.use("/",(req,res)=>{res.json("asdasdasd")})
 
-app.use( "/users" , require("./user.js") );
+router.use( "/" , (req , res , next)=> {
+	let filePath = path.join(__dirname, '..', 'front-end-build', 'index.html')
+	res.sendFile( filePath );
+} );
 
+module.exports = router;
 
-
-
-
-app.use("/" , function(req , res , next ){
-	console.log("i am getting here");
-	var authorization = req.headers.authorization;
-	if( authorization == undefined ){
-		res.status( 401 ).send("token not found");
-		return;
-	}
-	var token;
-	if( authorization.split(" ")[0] == "Bearer" ){
-		 token =  authorization.split(" ")[1];	
-	}else  {
-		token = authorization;
-	}	
-	
-	try{
-	
-		var user = auth.verifyUser( token );
-		
-		req.user = user;
-		next();
-		
-	}catch( err ){
-		err.statusCode = 401;
-		next(err);
-		return;
-	}
-
-	
-});
-
-
-app.use( "/meals/favs" , require("./favs") );
-app.use( "/meals" , require("./meals.js") );
-app.use( "/categories" , require("./categories.js") );
-app.use( "/orders" , require("./orders") );
-app.use( "/users" , require("./user") );
-app.use( "/" , (req , res , next)=>{ res.status(200).send("you have requested wong page")} );
-app.use(myLogger)
-
-module.exports = app;

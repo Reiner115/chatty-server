@@ -1,51 +1,56 @@
-const { ENOENT } = require('constants');
-const express = require('express');
-const fs = require("fs");
-const category  = require('./category');
-var jwt = require('jsonwebtoken');
-var crypto = require('crypto');
-var bodyParser = require('body-parser');
-var router = express.Router;
-const auth = require("./Authentication/auth");
+const session = require("express-session");
+const bodyParser = require("body-parser");
+const passport = require("passport");
+const express = require("express");
+const http = require("http");
+const cors = require("cors");
+const { Server } = require("socket.io");
+const socketConnection = require("./websocket/socketConnection");
 
+//express and middlewares
 const app = express();
-app.set( "view engine" , "ejs" );
-const port = 3000;
+app.use(cors({ origin: "http://localhost:3000" }));
+const sessionMiddleware = session({
+  secret: "changeit",
+  resave: false,
+  saveUninitialized: false,
+});
+app.use(sessionMiddleware);
+app.use(express.json());
+app.use(bodyParser.urlencoded({ extended: false }));
+app.use(passport.initialize());
+app.use(passport.session());
+
+//config passport
+passport.use(require("./config/passport/passportLocalStrategy")());
+passport.serializeUser(require("./config/passport/serializeUser"));
+passport.deserializeUser(require("./config/passport/deserializeUser"));
 
 
-app.use( express.json());
-app.use( express.urlencoded());
-var KEY = "MYKEY";
+app.use(express.static("front-end-build"));
+//routes
+app.use("/", require("./routes"));
 
+const server = http.createServer(app);
 
-
-
-
-//app.use("/public/",express.static('public'))
-
-
-
-
-//used before for serving static routes
-app.get("/public/images/:imageName" ,async function(req , res){
-	console.log("asked for image");
-	const exists = fs.existsSync( __dirname +  "/public/images/" + req.params.imageName );
-	
-	if( exists ){
-		
-		res.sendFile(  __dirname +  "/public/images/" + req.params.imageName );
-
-		
-	}
-		
-	else
-		res.status( 404 ).send('Not found');	
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+  },
 });
 
+// convert a connect middleware to a Socket.IO middleware
+const wrap = (middleware) => (socket, next) =>
+  middleware(socket.request, {}, next);
+io.use(wrap(sessionMiddleware));
+io.use(wrap(passport.initialize()));
+io.use(wrap(passport.session()));
+io.use((socket, next) => {
+  if (socket.request.user) next();
+  else next(new Error("unauthorized"));
+});
+io.on("connect", (socket) => socketConnection(socket));
+const port = process.env.CHAT_PORT || 3002;
 
-
-//app.use( "/" , (req , res , next)=>{ res.status(200).send("hiaaaaaaaaaaaa , i am Mohamed Adam")} );
-app.use( "/" , require("./routes") );
-
-
-	app.listen( process.env.PORT || port , ()=>{ console.log('listining at port  ' +( process.env.PORT || port ) ); });
+server.listen(port  , () =>console.log(`application is running at: http://localhost:${port}`) );
